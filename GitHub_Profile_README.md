@@ -70,9 +70,9 @@ What makes my profile different: I combine ML model knowledge with the cloud inf
 |---|---|---|
 | CompTIA SecAI+ (CY0-001) | CompTIA | 2026 |
 | Machine Learning Specialization | Stanford Online / DeepLearning.AI | 2025–2026 |
-| SC-900 — Security, Compliance & Identity | Microsoft | — |
-| AZ-900 — Azure Fundamentals | Microsoft | — |
-| CompTIA Security+ | CompTIA | — |
+| SC-900 — Security, Compliance & Identity | Microsoft | 2022 |
+| AZ-900 — Azure Fundamentals | Microsoft | 2020|
+| CompTIA Security+ | CompTIA | 2025 |
 
 ---
 
