@@ -1,0 +1,325 @@
+===============================================================================
+  Set-WindowsUpdateService.ps1  -  USER GUIDE
+  Check and set the startup type of the Windows Update service (wuauserv)
+  on the local computer and on remote computers.
+===============================================================================
+
+CONTENTS
+  1.  What the script does
+  2.  Requirements
+  3.  Getting the script onto your computer
+  4.  Allowing the script to run (execution policy)
+  5.  Running it on the LOCAL computer
+  6.  Running it on REMOTE computers
+  7.  Using a list of computers (text file)
+  8.  Using Active Directory
+  9.  All parameters
+  10. Understanding the output
+  11. Troubleshooting
+  12. Notes and best practices
+
+
+-------------------------------------------------------------------------------
+1. WHAT THE SCRIPT DOES
+-------------------------------------------------------------------------------
+For each computer, the script:
+
+  a) Shows the current state of the Windows Update service:
+       - Status (Running / Stopped)
+       - Startup type (Automatic, Automatic Delayed Start, Manual, Disabled)
+       - Group Policy settings that block Windows Update
+  b) Changes the startup type if it is not the one you want
+     (Automatic by default).
+  c) Optionally starts the service (-StartService).
+  d) Returns a result for every computer, and can save the results to a
+     CSV file.
+
+Nothing is changed when you use -ReportOnly or -WhatIf.
+
+
+-------------------------------------------------------------------------------
+2. REQUIREMENTS
+-------------------------------------------------------------------------------
+  - Windows PowerShell 5.1 (built into Windows 10/11) or PowerShell 7+.
+  - To CHANGE the service: run PowerShell as Administrator. On remote
+    computers, your account (or the one you pass with -Credential) must be
+    a local administrator.
+  - For REMOTE computers: PowerShell Remoting (WinRM) must be enabled on
+    them (see section 6).
+  - Reporting only (-ReportOnly) on the local computer does not need
+    Administrator rights.
+
+
+-------------------------------------------------------------------------------
+3. GETTING THE SCRIPT ONTO YOUR COMPUTER
+-------------------------------------------------------------------------------
+  1. Save Set-WindowsUpdateService.ps1 into a folder, for example:
+         D:\Google\   or   C:\Scripts\
+  2. Make sure the file name ends in .ps1 and NOT .ps1.txt.
+     (In File Explorer: View > Show > File name extensions.)
+
+
+-------------------------------------------------------------------------------
+4. ALLOWING THE SCRIPT TO RUN (EXECUTION POLICY)
+-------------------------------------------------------------------------------
+By default Windows blocks PowerShell scripts. If you see:
+
+    "...cannot be loaded because running scripts is disabled on this system"
+
+use ONE of the following.
+
+  Option A - allow scripts in the current window only (recommended):
+
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+    Unblock-File .\Set-WindowsUpdateService.ps1
+
+  Option B - allow your own scripts permanently for your account:
+
+    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+    Unblock-File .\Set-WindowsUpdateService.ps1
+
+  Option C - if execution policy is locked by Group Policy:
+
+    powershell.exe -ExecutionPolicy Bypass -File D:\Google\Set-WindowsUpdateService.ps1 -ReportOnly
+
+
+-------------------------------------------------------------------------------
+5. RUNNING IT ON THE LOCAL COMPUTER
+-------------------------------------------------------------------------------
+  1. Right-click Start > "Terminal (Admin)" or "Windows PowerShell (Admin)".
+  2. Go to the folder with the script:
+
+       cd D:\Google
+
+  3. Check only (no changes):
+
+       .\Set-WindowsUpdateService.ps1 -ReportOnly
+
+  4. Set the service to Automatic:
+
+       .\Set-WindowsUpdateService.ps1
+
+  5. Set it to Automatic AND start it:
+
+       .\Set-WindowsUpdateService.ps1 -StartService
+
+  6. Use a different startup type:
+
+       .\Set-WindowsUpdateService.ps1 -StartupType AutomaticDelayedStart
+       .\Set-WindowsUpdateService.ps1 -StartupType Manual
+
+
+-------------------------------------------------------------------------------
+6. RUNNING IT ON REMOTE COMPUTERS
+-------------------------------------------------------------------------------
+You run the script from YOUR computer and name the remote computers. It
+connects to them over PowerShell Remoting (WinRM) and processes up to 32
+of them at a time.
+
+STEP 1 - Make sure remote computers accept PowerShell Remoting
+
+  Test one computer (replace PC01 with a real computer name):
+
+       Test-WSMan PC01
+
+  - A response (ProtocolVersion, etc.) means it is ready.
+  - An error means remoting is off. Turn it on with ONE of these:
+
+      * On a single computer (run there, as Administrator):
+            Enable-PSRemoting -Force
+
+      * On many domain computers, with Group Policy:
+          Computer Configuration > Policies > Administrative Templates >
+            Windows Components > Windows Remote Management (WinRM) >
+            WinRM Service > "Allow remote server management through WinRM"
+            = Enabled  (IPv4 filter: *)
+          Computer Configuration > Policies > Windows Settings >
+            Security Settings > System Services >
+            "Windows Remote Management (WS-Management)" = Automatic
+          Windows Defender Firewall: allow the predefined inbound rule
+            "Windows Remote Management"
+
+STEP 2 - Check the computers first (no changes)
+
+       .\Set-WindowsUpdateService.ps1 -ComputerName PC01, PC02, PC03 -ReportOnly
+
+STEP 3 - Apply the change and save a report
+
+       .\Set-WindowsUpdateService.ps1 -ComputerName PC01, PC02, PC03 -StartService -CsvPath D:\Google\wu-report.csv
+
+If your current account is NOT an administrator on the remote computers,
+add -Credential. You will be asked for a user name (e.g. DOMAIN\adminuser)
+and password:
+
+       .\Set-WindowsUpdateService.ps1 -ComputerName PC01, PC02 -StartService -Credential (Get-Credential)
+
+
+-------------------------------------------------------------------------------
+7. USING A LIST OF COMPUTERS (TEXT FILE)
+-------------------------------------------------------------------------------
+  1. Create a text file, for example D:\Google\workstations.txt, with one
+     computer name per line. Blank lines and lines starting with # are
+     ignored:
+
+       # Front office
+       PC01
+       PC02
+       # Lab
+       LAB-PC15
+
+  2. Preview what would change:
+
+       .\Set-WindowsUpdateService.ps1 -ComputerListPath D:\Google\workstations.txt -WhatIf
+
+  3. Apply the change:
+
+       .\Set-WindowsUpdateService.ps1 -ComputerListPath D:\Google\workstations.txt -StartService -CsvPath D:\Google\wu-report.csv
+
+
+-------------------------------------------------------------------------------
+8. USING ACTIVE DIRECTORY
+-------------------------------------------------------------------------------
+Requires the ActiveDirectory module (RSAT). Example - all Windows 10/11
+computers:
+
+       Get-ADComputer -Filter 'OperatingSystem -like "*Windows 1*"' |
+           .\Set-WindowsUpdateService.ps1 -StartService -CsvPath D:\Google\wu-report.csv
+
+Example - only computers in one OU:
+
+       Get-ADComputer -Filter * -SearchBase "OU=Workstations,DC=contoso,DC=com" |
+           .\Set-WindowsUpdateService.ps1 -ReportOnly
+
+
+-------------------------------------------------------------------------------
+9. ALL PARAMETERS
+-------------------------------------------------------------------------------
+  -ComputerName <names>     One or more computers. Default: this computer.
+                            Example: -ComputerName PC01, PC02
+
+  -ComputerListPath <file>  Text file with one computer name per line.
+                            (Use either -ComputerName or -ComputerListPath.)
+
+  -StartupType <type>       Automatic (default), AutomaticDelayedStart,
+                            Manual, or Disabled.
+
+  -ReportOnly               Only show the current state. No changes.
+
+  -WhatIf                   Show what WOULD change. No changes.
+
+  -Confirm                  Ask before changing each computer.
+
+  -StartService             Also start the service if it is stopped.
+
+  -Credential <cred>        Account to use for remote computers.
+                            Example: -Credential (Get-Credential)
+
+  -CsvPath <file>           Save the results to a CSV file (opens in Excel).
+
+  -ThrottleLimit <number>   How many remote computers to process at once.
+                            Default: 32.
+
+  -Verbose                  Show extra progress messages.
+
+Built-in help:
+
+       Get-Help .\Set-WindowsUpdateService.ps1 -Full
+
+
+-------------------------------------------------------------------------------
+10. UNDERSTANDING THE OUTPUT
+-------------------------------------------------------------------------------
+Each computer returns these fields:
+
+  ComputerName        Name of the computer.
+  Reachable           False = the remote computer could not be contacted.
+  Status              Running or Stopped.
+  StartupTypeBefore   Startup type before the script ran.
+  StartupType         Startup type after the script ran.
+  DesiredStartupType  The startup type you asked for.
+  Compliant           True = the startup type now matches what you asked for.
+  Action              What was changed (or would be changed).
+  RebootRequired      True = the change was written to the registry and
+                      takes effect after the computer restarts.
+  PolicyWarnings      Group Policy settings that block Windows Update even
+                      when the service is running.
+  Error               Why something failed.
+
+A summary line is shown at the end, for example:
+
+  Windows Update service (Automatic): 18/20 compliant, 1 unreachable, 1 with errors.
+
+To see the results as a table instead of a list:
+
+       .\Set-WindowsUpdateService.ps1 -ComputerListPath .\workstations.txt -ReportOnly |
+           Format-Table ComputerName, Status, StartupType, Compliant, Error -AutoSize
+
+To see only computers that still need attention:
+
+       .\Set-WindowsUpdateService.ps1 -ComputerListPath .\workstations.txt -ReportOnly |
+           Where-Object { -not $_.Compliant }
+
+
+-------------------------------------------------------------------------------
+11. TROUBLESHOOTING
+-------------------------------------------------------------------------------
+PROBLEM: "running scripts is disabled on this system"
+  FIX:   See section 4.
+
+PROBLEM: "Administrator rights are required to change the startup type"
+  FIX:   Close PowerShell and open it again with "Run as Administrator".
+
+PROBLEM: Error "WinRM cannot complete the operation" / "cannot connect"
+         (Reachable = False)
+  FIX:   - Check the computer is on and the name is correct (ping PC01).
+         - Enable PowerShell Remoting on it (section 6, step 1).
+         - Check the firewall allows "Windows Remote Management".
+
+PROBLEM: "Access is denied"
+  FIX:   Your account is not a local administrator on that computer.
+         Use -Credential (Get-Credential) with an admin account.
+
+PROBLEM: Error mentioning "TrustedHosts" or "Kerberos"
+  CAUSE: The computer is not in your domain (workgroup PC), or you used an
+         IP address instead of a computer name.
+  FIX:   - Use the computer NAME, not the IP address.
+         - For workgroup computers, run this once on YOUR computer
+           (as Administrator), then use -Credential:
+             Set-Item WSMan:\localhost\Client\TrustedHosts -Value "PC01,PC02" -Concatenate -Force
+
+PROBLEM: RebootRequired = True
+  MEANING: Windows refused the normal change, so the script wrote the
+           setting to the registry. Restart the computer, then run the
+           script again with -ReportOnly to confirm.
+
+PROBLEM: The service goes back to Disabled after a while
+  CAUSE: A Group Policy, management tool (e.g. Intune/SCCM/RMM agent), or
+         "update blocker" software is disabling it.
+  FIX:   Check the PolicyWarnings column and your GPOs
+         (run "gpresult /h C:\gp.html" on the computer and open the file).
+
+PROBLEM: PolicyWarnings shows "NoAutoUpdate=1" or
+         "DisableWindowsUpdateAccess=1"
+  MEANING: Group Policy is blocking Windows Update even though the service
+           is set correctly. Change the policy under:
+             Computer Configuration > Administrative Templates >
+               Windows Components > Windows Update
+
+
+-------------------------------------------------------------------------------
+12. NOTES AND BEST PRACTICES
+-------------------------------------------------------------------------------
+  - Always run with -ReportOnly or -WhatIf first, then apply.
+  - Keep the CSV reports as a record of what was changed and when.
+  - The Windows 10/11 default for this service is "Manual (Trigger Start)";
+    Windows starts it when needed. Automatic is a supported setting. The
+    computers that really need fixing are the ones showing "Disabled".
+  - To enforce the setting permanently across a domain, you can also use a
+    GPO:
+      Computer Configuration > Policies > Windows Settings >
+        Security Settings > System Services > Windows Update = Automatic
+    and use this script to audit and fix computers that are out of line.
+  - If -StartupType Disabled is used on a running service, the service
+    keeps running until it is stopped or the computer restarts.
+
+===============================================================================
